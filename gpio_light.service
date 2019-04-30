@@ -1,0 +1,8 @@
+[Unit]
+Description=Daemon to control lights using a relay
+
+[Service]
+ExecStart=/usr/local/bin/gpio_light.py
+
+[Install]
+WantedBy=multi-user.target

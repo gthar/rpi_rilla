@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+
+import sys
+import time
+from threading import Timer
+from omxplayer import OMXPlayer
+
+from rpi_rilla.helpers import assoc, get_config
+from rpi_rilla.socket_handler import SocketHandler
+from rpi_rilla.ir_screensaver import defaults as screen_defaults
+from rpi_rilla.gpio_light import defaults as light_defaults
+from rpi_rilla.alarm import defaults as alarm_defaults
+from rpi_rilla.alarm import dummy_timer, State, get_sleep_time, alarm_controller, read_wakeup_time
+from rpi_rilla.alarm import im_awake, wake_up, snooze, good_night, make_worker
+
+
+def main():
+    screen_config = get_config(screen_defaults)
+    light_config = get_config(light_defaults)
+    alarm_config = get_config(alarm_defaults)
+
+    config = {"screen": screen_config,
+              "light":  light_config,
+              "alarm":  alarm_config}
+
+    default_time = config["alarm"]["wakeup time"]
+    try:
+        sleep_str = sys.argv[1]
+    except IndexError:
+        sleep_str = read_wakeup_time(default_time, "a quina hora et vols llevar?")
+
+    try:
+        sleep_time = get_sleep_time(sleep_str)
+    except (IndexError, ValueError):
+        sleep_time = get_sleep_time(default_time)
+
+    state = State()
+
+    player = OMXPlayer(config["alarm"]["song"], ["-o", "local"])
+    player.pause()
+
+    def worker_maker(f, *args):
+        return make_worker(f, config, player, state, *args)
+
+    cleanup = worker_maker(im_awake, "awake")
+    awaker = worker_maker(wake_up, "waking", alarm_config["waking time"], cleanup)
+    snoozer = lambda t: worker_maker(snooze, "snoozing", t, awaker)
+    to_bed = worker_maker(good_night, "sleeping", sleep_time, awaker)
+
+    sh = SocketHandler(alarm_controller(snoozer,
+                                        cleanup,
+                                        alarm_config["snooze time"]),
+                       port = config["alarm"]["port"],
+                       host = config["alarm"]["host"])
+
+    t = dummy_timer()
+    sh.start()
+    to_bed()
+
+    while state.get_val() != "awake":
+        if state.get_val() != "standby":
+            #print(state.get_val())
+            t.cancel()
+            t = Timer(state.get_wait(), state.get_action())
+            t.start()
+            state.set_val("standby")
+        time.sleep(1)
+
+    t.cancel()
+    sh.stop()
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

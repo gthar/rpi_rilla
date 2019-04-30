@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+
+import sys
+from rpi_rilla.gpio_light import defaults
+from rpi_rilla.socket_sender import main
+
+if __name__ == "__main__":
+    sys.exit(main(defaults))

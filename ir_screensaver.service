@@ -1,0 +1,8 @@
+[Unit]
+Description=Screensaver that responds to a PIR sensor
+
+[Service]
+ExecStart=/usr/local/bin/ir_screensaver.py
+
+[Install]
+WantedBy=multi-user.target
